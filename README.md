@@ -105,11 +105,30 @@ Au premier démarrage, l'application indexe les documents (une à deux minutes).
 
 ### Ajouter un document
 
-1. Placez le PDF dans `documents/<thème>/` (documents officiels uniquement).
-2. Décrivez-le dans `documents/sources.json` : fichier, thème, titre, producteur, année, licence, `type_source` (`enquete_nationale`, `oms`, `circ`, `pnlp`, `ministere`).
-3. Lancez `python index_corpus.py`, puis redémarrez l'application.
+1. Décrivez-le dans `documents/sources.json` :
+   - `fichier`, `titre`, `producteur`, `annee`, `licence` (telle qu'elle est écrite dans le document) ;
+   - `themes` : la **liste** de ses thèmes, par exemple `["paludisme", "cancer_sein", "cancer_col"]`. Le document est indexé dans la collection de **chacun** de ces thèmes ;
+   - `type_source` : `enquete_nationale`, `oms`, `circ`, `pnlp` ou `ministere` ;
+   - `url` : la page officielle du document ;
+   - `publiable` : `true` si la licence permet de le publier sur GitHub (licence ouverte, par exemple CC BY-NC-SA de l'OMS), sinon `false`.
+2. Placez le PDF dans le dossier de son **premier** thème : `documents/<themes[0]>/<fichier>`.
+3. Si `publiable` vaut `false`, ajoutez son nom au `.gitignore` (une ligne `documents/**/<fichier>`). Un test vérifie cette règle.
+4. Lancez `python index_corpus.py`, puis redémarrez l'application.
 
-Un PDF absent du registre est indexé avec un avertissement, sans titre ni type de source : il n'apparaît pas quand on filtre par type.
+Un PDF absent du registre est indexé avec un avertissement, sans titre ni type de source : il n'apparaît pas quand on filtre par type. Un PDF déclaré mais introuvable, ou rangé dans un autre dossier que celui de son premier thème, est signalé et n'est pas indexé.
+
+Les documents candidats, pas encore vérifiés, attendent dans `documents/_a_verifier/` (ignoré par Git et par l'indexation), avec leur fiche dans `documents/_a_verifier/CANDIDATS.md`.
+
+### Documents non publiables : les télécharger soi-même
+
+Seuls les documents à licence ouverte sont publiés dans ce dépôt. Les autres (licence non précisée ou « tous droits réservés ») sont listés dans `documents/sources.json` avec `"publiable": false` : ils sont ignorés par Git et restent sur la machine de chacun. Après un `git clone`, pour les obtenir :
+
+1. Ouvrez `documents/sources.json` et repérez les entrées `"publiable": false`.
+2. Téléchargez chaque document depuis son lien officiel (champ `url`).
+3. Enregistrez-le **sous le nom exact** indiqué dans `fichier`, dans le dossier de son premier thème (`documents/<themes[0]>/`).
+4. Lancez `python index_corpus.py`.
+
+Si un document manque, l'application fonctionne quand même : l'indexation affiche un avertissement et l'assistant répond à partir des documents présents.
 
 ### Évaluer le pipeline
 
@@ -129,7 +148,7 @@ python -m pytest
 
 ## Base de connaissances (thème tabac)
 
-- **Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023, rapport principal**, ANSD et ministère de la Santé et de l'Action sociale (publié en octobre 2025) : `documents/tabac/GATS_2023.pdf`. Le document ne précise pas de licence.
+- **Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023, rapport principal**, ANSD et ministère de la Santé et de l'Action sociale (publié en octobre 2025) : `documents/tabac/GATS_2023.pdf`. Le document ne précise pas de licence ; il est maintenu dans le dépôt par décision du responsable du projet (rapport public de l'ANSD), en exception à la règle des licences ouvertes.
 - **WHO global report on trends in prevalence of tobacco use 2000–2024 and projections 2025–2030** (en anglais), © Organisation mondiale de la Santé 2025, licence [CC BY-NC-SA 3.0 IGO](https://creativecommons.org/licenses/by-nc-sa/3.0/igo) : `documents/tabac/Rapport OMS_Tabagisme 2000_2024  projections 2025_2030.pdf`.
 
 ## Limites connues

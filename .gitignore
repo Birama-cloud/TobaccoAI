@@ -24,3 +24,13 @@ Thumbs.db
 
 # Archive des maquettes (images extraites dans docs/maquettes/)
 maquettes_TobaccoAI.zip
+
+# Documents candidats en attente de vérification (jamais indexés ni publiés)
+documents/_a_verifier/
+
+# Documents NON publiables sur GitHub (licence non ouverte ou non précisée) : ils restent en local.
+# Un fichier par ligne ; voir "publiable": false dans documents/sources.json et le README pour les télécharger.
+documents/**/OMS_AFRO_cadre_mise_en_oeuvre_strategie_col_2021.pdf
+documents/**/PNLP_PSNEP_2026_2030.pdf
+documents/**/ANSD_DHS_EDS_Continue_2023_FR390.pdf
+documents/**/ICO_CIRC_HPV_Information_Centre_Senegal.pdf

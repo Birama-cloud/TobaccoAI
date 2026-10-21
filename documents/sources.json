@@ -1,9 +1,11 @@
 {
-  "_lisez_moi": "Registre des documents indexés. Une entrée par PDF. Toutes les informations sont recopiées depuis le document lui-même (page indiquée dans 'reperes'). type_source : enquete_nationale, oms, circ, pnlp, ministere.",
+  "_lisez_moi": "Registre des documents indexés. Une entrée par PDF, recopiée depuis le document lui-même (page indiquée dans 'reperes'). themes : liste des thèmes (le document est indexé dans la collection de chacun). Le fichier se range dans le dossier du PREMIER thème (documents/<themes[0]>/<fichier>). type_source : enquete_nationale, oms, circ, pnlp, ministere. url : page officielle du document. publiable : true si la licence permet de le publier sur GitHub ; sinon false, et le fichier doit être listé dans .gitignore.",
   "documents": [
     {
       "fichier": "GATS_2023.pdf",
-      "theme": "tabac",
+      "themes": [
+        "tabac"
+      ],
       "titre": "Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023, rapport principal",
       "titre_court": "GATS Sénégal 2023",
       "producteur": "ANSD",
@@ -13,11 +15,20 @@
       "type_source": "enquete_nationale",
       "langue": "fr",
       "citation": "Agence nationale de la Statistique et de la Démographie (ANSD) et Ministère de la Santé et de l'Action sociale. 2023. Enquête mondiale sur le tabagisme chez les Adultes (Global Adult Tobacco Survey, GATS) – Sénégal 2023.",
-      "reperes": "Titre : page 1 (rapport principal 2023, publié en octobre 2025). Citation recommandée : page 3."
+      "reperes": "Titre : page 1 (rapport principal 2023, publié en octobre 2025). Citation recommandée : page 3.",
+      "url": "https://www.ansd.sn/Indicateur/rapports-des-enquetes-sur-le-tabagisme-gats",
+      "url_pdf": "https://www.ansd.sn/sites/default/files/2025-10/GATS-II%202023_Rapport%20final_Octobre_2025.pdf",
+      "url_remarque": "Page officielle de l'ANSD. Le PDF qu'elle propose est identique au fichier du dépôt (même empreinte MD5). Vérifié le 21/10/2026.",
+      "url_secondaire": "https://www.vie-publique.sn/documents/10555/enquete-mondiale-tabagisme-adultes-gats-senegal-2023-ansd",
+      "url_secondaire_remarque": "Copie identique (même empreinte) hébergée par vie-publique.sn, plateforme citoyenne indépendante non affiliée au gouvernement. Vérifiée le 21/10/2026.",
+      "publiable": true,
+      "publiable_raison": "Licence non précisée dans le document ; maintenu sur GitHub par décision du responsable du projet (rapport public de l'ANSD, déjà publié dans le dépôt)."
     },
     {
       "fichier": "Rapport OMS_Tabagisme 2000_2024  projections 2025_2030.pdf",
-      "theme": "tabac",
+      "themes": [
+        "tabac"
+      ],
       "titre": "WHO global report on trends in prevalence of tobacco use 2000–2024 and projections 2025–2030",
       "titre_court": "OMS, tendances du tabagisme 2000–2024",
       "producteur": "OMS",
@@ -27,7 +38,9 @@
       "type_source": "oms",
       "langue": "en",
       "citation": "WHO global report on trends in prevalence of tobacco use 2000-2024 and projections 2025-2030. Geneva: World Health Organization; 2025. Licence: CC BY-NC-SA 3.0 IGO.",
-      "reperes": "Titre : page 1. Licence, ISBN et citation recommandée : page 3."
+      "reperes": "Titre : page 1. Licence, ISBN et citation recommandée : page 3.",
+      "url": "https://www.who.int/publications/i/item/9789240116276",
+      "publiable": true
     }
   ]
 }

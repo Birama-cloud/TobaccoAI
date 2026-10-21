@@ -8,17 +8,39 @@ import json
 
 import config
 
-REQUIRED_FIELDS = ("fichier", "theme", "titre", "producteur", "annee", "licence", "type_source")
+REQUIRED_FIELDS = ("fichier", "themes", "titre", "producteur", "annee", "licence", "type_source", "url", "publiable")
 
 
 class RegistryError(ValueError):
     """Le fichier sources.json est mal formé."""
 
 
+def _check_entry(entry, i, name):
+    missing = [f for f in REQUIRED_FIELDS if entry.get(f) in (None, "", [])]
+    if missing:
+        raise RegistryError(f"{name}, document n°{i} : champ(s) manquant(s) : {', '.join(missing)}")
+    fichier = entry["fichier"]
+    themes = entry["themes"]
+    if not isinstance(themes, list):
+        raise RegistryError(f"{name}, {fichier} : « themes » doit être une liste, par exemple [\"cancer_col\"]")
+    unknown = [t for t in themes if t not in config.THEMES]
+    if unknown:
+        raise RegistryError(f"{name}, {fichier} : thème(s) inconnu(s) {unknown} (valeurs possibles : {', '.join(config.THEMES)})")
+    if len(set(themes)) != len(themes):
+        raise RegistryError(f"{name}, {fichier} : thème en double dans {themes}")
+    if entry["type_source"] not in config.SOURCE_TYPES:
+        raise RegistryError(
+            f"{name}, {fichier} : type_source {entry['type_source']!r} inconnu "
+            f"(valeurs possibles : {', '.join(config.SOURCE_TYPES)})"
+        )
+    if not isinstance(entry["publiable"], bool):
+        raise RegistryError(f"{name}, {fichier} : « publiable » doit valoir true ou false")
+
+
 def load_registry(path=config.SOURCES_REGISTRY):
     """
-    Renvoie {(thème, fichier): entrée}. Un registre absent donne un registre
-    vide ; un registre mal formé lève RegistryError avec un message clair.
+    Renvoie {fichier: entrée}. Un registre absent donne un registre vide ;
+    un registre mal formé lève RegistryError avec un message clair.
     """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -29,18 +51,25 @@ def load_registry(path=config.SOURCES_REGISTRY):
 
     registry = {}
     for i, entry in enumerate(data.get("documents", []), start=1):
-        missing = [f for f in REQUIRED_FIELDS if entry.get(f) in (None, "")]
-        if missing:
-            raise RegistryError(f"{path.name}, document n°{i} : champ(s) manquant(s) : {', '.join(missing)}")
-        if entry["theme"] not in config.THEMES:
-            raise RegistryError(f"{path.name}, {entry['fichier']} : thème inconnu {entry['theme']!r}")
-        if entry["type_source"] not in config.SOURCE_TYPES:
-            raise RegistryError(
-                f"{path.name}, {entry['fichier']} : type_source {entry['type_source']!r} inconnu "
-                f"(valeurs possibles : {', '.join(config.SOURCE_TYPES)})"
-            )
-        registry[(entry["theme"], entry["fichier"])] = entry
+        _check_entry(entry, i, path.name)
+        if entry["fichier"] in registry:
+            raise RegistryError(f"{path.name} : {entry['fichier']} est déclaré deux fois")
+        registry[entry["fichier"]] = entry
     return registry
+
+
+def home_theme(entry):
+    """Dossier où le fichier est rangé : celui de son premier thème."""
+    return entry["themes"][0]
+
+
+def document_path(entry):
+    return config.theme_docs_dir(home_theme(entry)) / entry["fichier"]
+
+
+def entries_for_theme(registry, theme):
+    """Documents du registre à indexer dans la collection de ce thème."""
+    return [e for e in registry.values() if theme in e["themes"]]
 
 
 def chunk_metadata(entry, fichier):
@@ -62,6 +91,20 @@ def chunk_metadata(entry, fichier):
         "licence": entry["licence"],
         "type_source": entry["type_source"],
     }
+
+
+def missing_file_warning(entry):
+    return (
+        f"⚠ {entry['fichier']} est décrit dans documents/sources.json mais introuvable dans "
+        f"documents/{home_theme(entry)}/ (dossier de son premier thème) : il n'est pas indexé."
+    )
+
+
+def misplaced_warning(theme, entry):
+    return (
+        f"⚠ {entry['fichier']} est rangé dans documents/{theme}/, mais sources.json le place dans "
+        f"documents/{home_theme(entry)}/ (premier de ses thèmes) : déplacez-le, il n'est pas indexé depuis ce dossier."
+    )
 
 
 def unregistered_warning(theme, fichier):

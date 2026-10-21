@@ -129,7 +129,7 @@ def _render_pending(theme):
 
 
 def _sources_table_html(theme, registry):
-    entries = [e for (th, _), e in registry.items() if th == theme]
+    entries = [e for e in registry.values() if theme in e["themes"]]
     if not entries:
         return '<p class="data-source">Aucun document répertorié pour ce thème dans documents/sources.json.</p>'
     rows = "".join(

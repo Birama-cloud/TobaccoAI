@@ -6,7 +6,10 @@ Une collection par thème : tabac, cancer_sein, cancer_col.
 import config
 from rag.chunking import build_chunks
 from rag.pdf import extract_pages
-from rag.sources import chunk_metadata, load_registry, unregistered_warning
+from rag.sources import (
+    chunk_metadata, document_path, entries_for_theme, load_registry, misplaced_warning,
+    missing_file_warning, unregistered_warning,
+)
 
 
 def load_embedder(model_name=config.EMBEDDING_MODEL):
@@ -79,19 +82,41 @@ def sync_source_metadata(theme, collection, registry):
     data = collection.get(include=["metadatas"])
     new_metadatas = []
     for meta in data["metadatas"]:
-        entry = registry.get((theme, meta.get("source")))
+        entry = registry.get(meta.get("source"))
         new_metadatas.append({**meta, **chunk_metadata(entry, meta.get("source"))})
     if new_metadatas != data["metadatas"]:
         collection.update(ids=data["ids"], metadatas=new_metadatas)
 
 
+def documents_for_theme(theme, registry, log=print):
+    """
+    Documents à indexer dans la collection d'un thème, sous forme {fichier: chemin} :
+    - ceux du registre qui listent ce thème (rangés dans le dossier de leur premier thème) ;
+    - les PDF du dossier du thème absents du registre (indexés avec un avertissement).
+    """
+    documents = {}
+    for entry in entries_for_theme(registry, theme):
+        path = document_path(entry)
+        if path.exists():
+            documents[entry["fichier"]] = path
+        else:
+            log(missing_file_warning(entry))
+    for fname in list_pdf_files(theme):
+        entry = registry.get(fname)
+        if entry is None:
+            log(unregistered_warning(theme, fname))
+            documents[fname] = config.theme_docs_dir(theme) / fname
+        elif document_path(entry) != config.theme_docs_dir(theme) / fname:
+            log(misplaced_warning(theme, entry))
+    return documents
+
+
 def index_theme(theme, embedder, collection, force_reindex=False, log=print, registry=None):
     """
     Extraction -> découpage par page -> embeddings -> stockage, pour tous les
-    PDF du dossier du thème. Ne traite que les documents pas encore indexés,
-    sauf si force_reindex=True (repart alors de zéro pour ce thème).
-    Chaque morceau reçoit les informations du registre des sources ; un PDF
-    absent du registre déclenche un avertissement, pas une erreur.
+    documents du thème (voir documents_for_theme). Un document à plusieurs
+    thèmes est indexé dans la collection de chacun. Ne traite que les documents
+    pas encore indexés, sauf si force_reindex=True (repart alors de zéro pour ce thème).
     Renvoie le nombre de morceaux ajoutés. `log` reçoit les messages de suivi.
     """
     if registry is None:
@@ -100,23 +125,17 @@ def index_theme(theme, embedder, collection, force_reindex=False, log=print, reg
     if force_reindex and collection.count() > 0:
         collection.delete(ids=collection.get()["ids"])
 
-    for fname in list_pdf_files(theme):
-        if (theme, fname) not in registry:
-            log(unregistered_warning(theme, fname))
-
+    documents = documents_for_theme(theme, registry, log=log)
     sync_source_metadata(theme, collection, registry)
 
     already_indexed = get_indexed_sources(collection)
-    files_to_process = [f for f in list_pdf_files(theme) if f not in already_indexed]
+    files_to_process = [f for f in sorted(documents) if f not in already_indexed]
     label = config.THEMES[theme]["label"]
-
-    if not files_to_process:
-        return 0
 
     total_added = 0
     for fname in files_to_process:
         try:
-            pages = extract_pages(config.theme_docs_dir(theme) / fname)
+            pages = extract_pages(documents[fname])
         except Exception as e:
             log(f"[{label}] Erreur d'extraction de {fname} : {e}")
             continue
@@ -124,7 +143,7 @@ def index_theme(theme, embedder, collection, force_reindex=False, log=print, reg
             log(f"[{label}] Aucun texte extrait de {fname} — ignoré.")
             continue
 
-        extra = chunk_metadata(registry.get((theme, fname)), fname)
+        extra = chunk_metadata(registry.get(fname), fname)
         texts, metadatas, ids = build_chunks(pages, source=fname, theme=theme, extra_metadata=extra)
         if not texts:
             continue
