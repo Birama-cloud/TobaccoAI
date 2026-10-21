@@ -1,0 +1,128 @@
+[
+  {
+    "id": 1,
+    "question": "Quel est le taux de tabagisme (consommation actuelle de tabac) chez les adultes au Sénégal ?",
+    "expects_answer": true,
+    "expected_keywords": ["4,4"],
+    "expected_pages": [14, 94, 166]
+  },
+  {
+    "id": 2,
+    "question": "Quel est le taux de tabagisme chez les jeunes de 15-24 ans ?",
+    "expects_answer": true,
+    "expected_keywords": ["1,6"],
+    "expected_pages": [14, 49]
+  },
+  {
+    "id": 3,
+    "question": "Quelle proportion des adultes connaît les cigarettes électroniques ?",
+    "expects_answer": true,
+    "expected_keywords": ["36,6"],
+    "expected_pages": [15, 52, 94]
+  },
+  {
+    "id": 4,
+    "question": "Quelle est la prévalence de l'utilisation actuelle de la cigarette électronique chez les adultes ?",
+    "expects_answer": true,
+    "expected_keywords": ["0,4"],
+    "expected_pages": [15, 52, 94]
+  },
+  {
+    "id": 5,
+    "question": "Quel pourcentage de fumeurs ont l'intention d'arrêter de fumer ou y pensent ?",
+    "expects_answer": true,
+    "expected_keywords": ["62,5"],
+    "expected_pages": [15, 94]
+  },
+  {
+    "id": 6,
+    "question": "Quelle proportion des fumeurs a fait au moins une tentative d'arrêt du tabac au cours des 12 derniers mois ?",
+    "expects_answer": true,
+    "expected_keywords": ["52,4"],
+    "expected_pages": [15, 94]
+  },
+  {
+    "id": 7,
+    "question": "Quelle part des tentatives d'arrêt du tabac se fait sans aucune aide ?",
+    "expects_answer": true,
+    "expected_keywords": ["74,4"],
+    "expected_pages": [15, 94]
+  },
+  {
+    "id": 8,
+    "question": "Quel pourcentage d'adultes travaillant dans une salle fermée est exposé à la fumée secondaire sur son lieu de travail ?",
+    "expects_answer": true,
+    "expected_keywords": ["21,1"],
+    "expected_pages": [15, 166]
+  },
+  {
+    "id": 9,
+    "question": "Depuis quelle loi le Sénégal exige-t-il des avertissements sanitaires sur les paquets de cigarettes ?",
+    "expects_answer": true,
+    "expected_keywords": ["2014-14", "2014"],
+    "expected_pages": [16, 60]
+  },
+  {
+    "id": 10,
+    "question": "Quelle proportion de la surface des paquets de cigarettes doit être couverte par des avertissements sanitaires illustrés ?",
+    "expects_answer": true,
+    "expected_keywords": ["70"],
+    "expected_pages": [16]
+  },
+  {
+    "id": 11,
+    "question": "Quelle était la prévalence globale du tabagisme chez les adultes en 2015, avant de baisser à 4,4% en 2023 ?",
+    "expects_answer": true,
+    "expected_keywords": ["6,0", "6%"],
+    "expected_pages": [94]
+  },
+  {
+    "id": 12,
+    "question": "En quelle année a eu lieu la première édition de la GATS au Sénégal ?",
+    "expects_answer": true,
+    "expected_keywords": ["2015"],
+    "expected_pages": [19]
+  },
+  {
+    "id": 13,
+    "question": "Combien de ménages ont été sélectionnés pour l'enquête GATS 2023 ?",
+    "expects_answer": true,
+    "expected_keywords": ["4 148", "4148"],
+    "expected_pages": [14]
+  },
+  {
+    "id": 14,
+    "question": "Quel est le taux de réponse global de l'enquête GATS 2023 ?",
+    "expects_answer": true,
+    "expected_keywords": ["97,3"],
+    "expected_pages": [14]
+  },
+  {
+    "id": 15,
+    "question": "Quelle proportion des adultes est exposée à la fumée secondaire dans les restaurants ?",
+    "expects_answer": true,
+    "expected_keywords": ["24,8"],
+    "expected_pages": [166]
+  },
+  {
+    "id": 16,
+    "question": "Quel est le taux de tabagisme au Nigéria en 2023 ?",
+    "expects_answer": false,
+    "expected_keywords": [],
+    "expected_pages": []
+  },
+  {
+    "id": 17,
+    "question": "Quelle est la meilleure recette de thiéboudienne ?",
+    "expects_answer": false,
+    "expected_keywords": [],
+    "expected_pages": []
+  },
+  {
+    "id": 18,
+    "question": "Quel est le taux de tabagisme chez les enfants de moins de 10 ans au Sénégal ?",
+    "expects_answer": false,
+    "expected_keywords": [],
+    "expected_pages": []
+  }
+]

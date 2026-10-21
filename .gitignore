@@ -1,0 +1,19 @@
+# Environnement Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Base vectorielle : recréée par l'application lors de l'indexation
+chroma_db/
+
+# Résultats d'évaluation : générés par evaluate_rag.py
+eval_results.csv
+
+# PyCharm / systèmes
+.idea/
+.DS_Store
+Thumbs.db
