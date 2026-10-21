@@ -1,0 +1,33 @@
+{
+  "_lisez_moi": "Registre des documents indexés. Une entrée par PDF. Toutes les informations sont recopiées depuis le document lui-même (page indiquée dans 'reperes'). type_source : enquete_nationale, oms, circ, pnlp, ministere.",
+  "documents": [
+    {
+      "fichier": "GATS_2023.pdf",
+      "theme": "tabac",
+      "titre": "Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023, rapport principal",
+      "titre_court": "GATS Sénégal 2023",
+      "producteur": "ANSD",
+      "producteur_complet": "Agence nationale de la Statistique et de la Démographie (ANSD) et Ministère de la Santé et de l'Action sociale",
+      "annee": 2023,
+      "licence": "Non précisée dans le document",
+      "type_source": "enquete_nationale",
+      "langue": "fr",
+      "citation": "Agence nationale de la Statistique et de la Démographie (ANSD) et Ministère de la Santé et de l'Action sociale. 2023. Enquête mondiale sur le tabagisme chez les Adultes (Global Adult Tobacco Survey, GATS) – Sénégal 2023.",
+      "reperes": "Titre : page 1 (rapport principal 2023, publié en octobre 2025). Citation recommandée : page 3."
+    },
+    {
+      "fichier": "Rapport OMS_Tabagisme 2000_2024  projections 2025_2030.pdf",
+      "theme": "tabac",
+      "titre": "WHO global report on trends in prevalence of tobacco use 2000–2024 and projections 2025–2030",
+      "titre_court": "OMS, tendances du tabagisme 2000–2024",
+      "producteur": "OMS",
+      "producteur_complet": "Organisation mondiale de la Santé (World Health Organization)",
+      "annee": 2025,
+      "licence": "CC BY-NC-SA 3.0 IGO",
+      "type_source": "oms",
+      "langue": "en",
+      "citation": "WHO global report on trends in prevalence of tobacco use 2000-2024 and projections 2025-2030. Geneva: World Health Organization; 2025. Licence: CC BY-NC-SA 3.0 IGO.",
+      "reperes": "Titre : page 1. Licence, ISBN et citation recommandée : page 3."
+    }
+  ]
+}

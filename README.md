@@ -1,25 +1,68 @@
 # TobaccoAI
 
-**Assistant documentaire sur le tabagisme au Sénégal, fondé sur l'approche RAG (Retrieval-Augmented Generation).**
+**Plateforme d'information en santé publique pour le Sénégal, destinée aux chercheurs, aux étudiants et aux organisations (ONG, associations, institutions).**
 
-TobaccoAI permet d'interroger en langage naturel des rapports officiels sur le tabagisme (enquête GATS Sénégal 2023, rapport de l'OMS…) et d'obtenir des réponses qui **citent le document et la page** d'où vient chaque information. Un tableau de bord présente aussi les indicateurs clés de l'enquête GATS 2023.
+Elle réunit un assistant qui interroge un corpus de documents officiels en **citant le document et la page** de chaque information (approche RAG, *Retrieval-Augmented Generation*), et un espace de données chiffrées et sourcées. Le nom définitif de la plateforme reste à choisir (`NOM_PLATEFORME` dans `config.py`).
 
-## Fonctionnalités
+| Thème | Dossier | État |
+|---|---|---|
+| Tabac | `documents/tabac/` | GATS Sénégal 2023 (ANSD) et rapport OMS indexés ; tableau de bord |
+| Cancer du sein | `documents/cancer_sein/` | En attente des documents officiels |
+| Cancer du col de l'utérus | `documents/cancer_col/` | En attente des documents officiels |
+| Paludisme | `documents/paludisme/` | En attente des documents officiels |
 
-- **Questions-réponses sur plusieurs rapports PDF** : on dépose les rapports dans l'application, ils sont découpés, indexés, puis interrogeables.
-- **Citations systématiques** : chaque réponse indique le document et le numéro de page utilisés, et les extraits sont consultables.
-- **Garde-fou contre les réponses inventées** : si aucun passage n'est assez proche de la question (distance cosinus supérieure à 0,78), l'application répond qu'elle ne trouve pas l'information au lieu de générer une réponse.
-- **Tableau de bord GATS 2023** : prévalence par âge, sexe et milieu de résidence, évolution 2015 → 2023. Ces chiffres sont saisis à la main depuis le rapport, avec la page source, et ne sont pas produits par l'IA.
-- **Script d'évaluation** : un jeu de 18 questions (dont 3 questions pièges) mesure la récupération de la bonne page, l'exactitude des réponses et le bon refus sur les questions hors sujet.
+## Les pages
 
-## Fonctionnement
+| Page | Contenu |
+|---|---|
+| **Accueil** | Accroche, barre « Interroger le corpus » (ouvre l'Assistant avec la question), chiffres clés par thème, publics, thèmes |
+| **Assistant** | Questions-réponses sourcées : choix du thème, filtre par type de source, extraits avec score de similarité, référence à copier, suggestions |
+| **Synthèses** | Bientôt disponible |
+| **Cartographie** | Bientôt disponible |
+| **Espace données** | Un onglet par thème : indicateurs GATS 2023, tableau des sources, export CSV |
 
-1. **Extraction** du texte de chaque PDF, page par page (pypdf).
-2. **Découpage** en morceaux d'environ 220 mots avec 40 mots de chevauchement, sans jamais mélanger deux pages.
-3. **Vectorisation** avec un modèle multilingue (`paraphrase-multilingual-MiniLM-L12-v2`, sentence-transformers), adapté aux rapports en français.
-4. **Stockage** dans une base vectorielle persistante ChromaDB (distance cosinus).
-5. **Recherche** des 5 passages les plus proches de la question, filtrés par le seuil de pertinence.
-6. **Génération** de la réponse par `gpt-4o-mini` (OpenAI), à partir de ces seuls passages, avec citation des pages.
+Les maquettes validées sont dans `docs/maquettes/`.
+
+## Règles de fiabilité
+
+- **Jamais de réponse sans source** : si aucun extrait ne dépasse le seuil de pertinence (distance cosinus ≤ 0,78), l'assistant le dit et propose de reformuler, sans appeler le modèle.
+- **Chaque affirmation est suivie de sa source** (document, page) ; si les documents ne permettent pas de répondre, l'assistant l'écrit au lieu de deviner.
+- **Les chiffres de l'Espace données et de l'Accueil ne sont pas produits par l'IA** : ils sont saisis à la main dans `indicateurs.py`, avec leur page. Un test (`tests/test_indicateurs.py`) fige les chiffres vérifiés du GATS 2023. Un thème sans document affiche « données à venir ».
+- **Aucun document, chiffre ou source n'est inventé** : chaque PDF est décrit dans `documents/sources.json` à partir des informations écrites dans le document lui-même.
+
+## Santé et données personnelles
+
+- L'assistant **informe** à partir des sources. Il ne pose **aucun diagnostic** et ne donne **aucun conseil de traitement** (règles inscrites dans le prompt, `rag/generation.py`).
+- L'encadré « Important » rappelle que les réponses peuvent contenir des erreurs, que les questions ne sont pas enregistrées, et qu'il ne faut y inclure aucune donnée permettant d'identifier une personne.
+- **Les questions ne sont jamais enregistrées sur le disque** : l'historique de conversation reste en mémoire de session. Les questions sont en revanche transmises au fournisseur du modèle (OpenAI, Gemini) ; avec Ollama, tout reste sur la machine.
+- Tout texte affiché en HTML (question, réponse, titre, extrait) est échappé.
+- Les statistiques d'usage de Streamlit et la télémétrie de ChromaDB sont désactivées.
+
+## Structure du code
+
+```
+application.py            Point d'entrée Streamlit (navigation à 5 pages)
+config.py                 Réglages : nom, thèmes et couleurs, types de source, modèle, seuil, TOP_K...
+indicateurs.py            Chiffres saisis à la main, avec source et page (Accueil, Espace données, CSV)
+index_corpus.py           Indexation en ligne de commande
+evaluate_rag.py           Évaluation par thème (même code que l'application)
+llm/client.py             Client du modèle de langage (OpenAI, Gemini, Ollama)
+rag/pdf.py                Extraction du texte, page par page
+rag/chunking.py           Découpage en morceaux (jamais à cheval sur deux pages)
+rag/sources.py            Registre des sources (documents/sources.json)
+rag/store.py              Embeddings locaux, ChromaDB (une collection par thème), indexation
+rag/retrieval.py          Recherche, filtre par type de source, seuil de pertinence
+rag/generation.py         Prompt unique et citations
+rag/pipeline.py           answer_question() : utilisée par l'application ET l'évaluation
+ui/style.css              Feuille de style unique
+ui/layout.py              En-tête et navigation
+ui/formatting.py          Blocs HTML (texte échappé)
+ui/pages/                 Une fonction render() par page
+.streamlit/config.toml    Thème (couleurs, police Plus Jakarta Sans)
+documents/<thème>/        PDF de chaque thème
+documents/sources.json    Registre des sources
+tests/                    Tests automatisés (pytest), sans clé d'API
+```
 
 ## Installation
 
@@ -34,14 +77,23 @@ source .venv/bin/activate        (Linux, macOS)
 pip install -r requirements.txt
 ```
 
-## Base de connaissances
+## Configuration
 
-Les rapports qui forment la base de connaissances sont inclus dans le dossier `documents/` :
+Le choix du modèle et la clé d'API se règlent dans un fichier `.env`, jamais envoyé sur GitHub :
 
-- **Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023**, Agence nationale de la statistique et de la démographie (ANSD) : `documents/GATS_2023.pdf`.
-- **Rapport de l'OMS sur les tendances de la prévalence du tabagisme 2000–2024 et projections 2025–2030**, © Organisation mondiale de la santé 2025, sous licence [CC BY-NC-SA 3.0 IGO](https://creativecommons.org/licenses/by-nc-sa/3.0/igo) : `documents/Rapport OMS_Tabagisme 2000_2024  projections 2025_2030.pdf`.
+```
+copy .env.example .env           (Windows)
+cp .env.example .env             (Linux, macOS)
+```
 
-D'autres rapports PDF peuvent être ajoutés dans ce dossier ou déposés directement dans l'application.
+| Variable | Rôle |
+|---|---|
+| `LLM_PROVIDER` | `openai` (par défaut), `gemini` ou `ollama` |
+| `LLM_MODEL` | Nom du modèle (facultatif pour OpenAI : `gpt-4o-mini`) |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` | Clé d'API (si elle manque, un champ apparaît dans l'Assistant) |
+| `LLM_BASE_URL` | Adresse du service, si elle diffère de l'adresse par défaut |
+
+Ne mettez jamais de clé dans le code.
 
 ## Utilisation
 
@@ -49,31 +101,47 @@ D'autres rapports PDF peuvent être ajoutés dans ce dossier ou déposés direct
 streamlit run application.py
 ```
 
-1. Saisissez votre clé API OpenAI dans la barre latérale. Elle reste dans la session et n'est jamais enregistrée.
-2. Cliquez sur **Indexer les nouveaux documents**.
-3. Posez vos questions dans l'onglet **Assistant**, ou consultez l'onglet **Tableau de bord**.
+Au premier démarrage, l'application indexe les documents (une à deux minutes).
+
+### Ajouter un document
+
+1. Placez le PDF dans `documents/<thème>/` (documents officiels uniquement).
+2. Décrivez-le dans `documents/sources.json` : fichier, thème, titre, producteur, année, licence, `type_source` (`enquete_nationale`, `oms`, `circ`, `pnlp`, `ministere`).
+3. Lancez `python index_corpus.py`, puis redémarrez l'application.
+
+Un PDF absent du registre est indexé avec un avertissement, sans titre ni type de source : il n'apparaît pas quand on filtre par type.
 
 ### Évaluer le pipeline
 
-Après avoir indexé les documents dans l'application :
-
 ```
-set OPENAI_API_KEY=sk-...        (Windows)
-export OPENAI_API_KEY=sk-...     (Linux, macOS)
-python evaluate_rag.py
+python evaluate_rag.py --theme tabac
+python evaluate_rag.py --theme tabac --pause 13     (offre gratuite Gemini : 5 requêtes par minute)
 ```
 
-Le script affiche un résumé et enregistre le détail dans `eval_results.csv`.
+Résumé à l'écran et détail dans `eval_results_tabac.csv`.
+
+### Lancer les tests
+
+```
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+## Base de connaissances (thème tabac)
+
+- **Enquête mondiale sur le tabagisme chez les adultes (GATS) – Sénégal 2023, rapport principal**, ANSD et ministère de la Santé et de l'Action sociale (publié en octobre 2025) : `documents/tabac/GATS_2023.pdf`. Le document ne précise pas de licence.
+- **WHO global report on trends in prevalence of tobacco use 2000–2024 and projections 2025–2030** (en anglais), © Organisation mondiale de la Santé 2025, licence [CC BY-NC-SA 3.0 IGO](https://creativecommons.org/licenses/by-nc-sa/3.0/igo) : `documents/tabac/Rapport OMS_Tabagisme 2000_2024  projections 2025_2030.pdf`.
 
 ## Limites connues
 
-- L'extraction de texte des PDF perd une partie de la structure des tableaux : certains chiffres présents dans des tableaux sont mal retrouvés.
-- Le seuil de pertinence (0,78) a été réglé à la main et reste à calibrer sur un jeu de test plus large.
-- Les réponses dépendent d'une API payante (OpenAI).
+- **La recherche retrouve mal certaines pages** : à l'évaluation, la page attendue du GATS n'est retrouvée que pour 4 questions sur 16. L'extraction du texte des PDF perd la structure des tableaux, et le rapport OMS remonte souvent avant le GATS.
+- Le seuil de pertinence (0,78) a été réglé à la main ; les questions pièges proches du sujet (autre pays, autre tranche d'âge) le franchissent, et seul le modèle peut alors refuser.
+- L'évaluation avec un vrai modèle de langage reste à mener (quotas OpenAI et Gemini épuisés lors des essais).
+- Les thèmes cancer du sein, cancer du col et paludisme n'ont pas encore de documents ni de jeu d'évaluation.
 
 ## Technologies
 
-Python · Streamlit · pypdf · sentence-transformers · ChromaDB · OpenAI (`gpt-4o-mini`) · pandas
+Python · Streamlit · pypdf · sentence-transformers · ChromaDB · OpenAI SDK (OpenAI, Gemini, Ollama) · pandas · pytest
 
 ## Auteur
 

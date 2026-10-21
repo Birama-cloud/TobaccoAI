@@ -1,216 +1,165 @@
 """
-Évaluation technique du RAG — TobaccoAI
-=========================================
-Priorité 6 du plan de transformation : mesurer objectivement la fiabilité
-du pipeline RAG avant de le présenter au concours, au lieu d'avancer des
-résultats non mesurés.
+Évaluation du pipeline RAG, thème par thème
+=============================================
+Ce script appelle EXACTEMENT le même code que l'application
+(rag.pipeline.answer_question : même recherche, même seuil, même prompt,
+même modèle, tous réglés dans config.py). Il mesure donc ce que voit
+réellement l'utilisateur.
 
-Ce script :
-  1. Se connecte à la même base vectorielle persistante que l'application
-     (./chroma_db, collection "gats_rag_multilingual") — il teste donc
-     exactement ce qui est réellement indexé, pas une copie recréée.
-  2. Pour chaque question du jeu de test (eval_questions.json), effectue
-     la même recherche + génération que l'app, et vérifie :
-       - si la page attendue a été retrouvée (pertinence du retrieval)
-       - si les mots-clés attendus apparaissent dans la réponse (exactitude)
-       - si le garde-fou anti-hallucination réagit correctement sur les
-         questions "pièges" (hors-sujet ou information absente du rapport)
-       - le temps de réponse
-  3. Affiche un rapport résumé et sauvegarde le détail dans un CSV.
+Pour chaque question du jeu de test du thème (ex : eval_questions_tabac.json),
+il vérifie :
+  - si la page attendue a été retrouvée (pertinence de la recherche) ;
+  - si les mots-clés attendus apparaissent dans la réponse (exactitude) ;
+  - si le garde-fou réagit correctement sur les questions pièges ;
+  - le temps de réponse.
+Si la base du thème est vide, il indexe d'abord les documents du thème.
 
 Usage :
-    pip install sentence-transformers chromadb openai --break-system-packages
-    python evaluate_rag.py --api-key sk-...
-    (ou définir la variable d'environnement OPENAI_API_KEY)
-
-IMPORTANT : lancez d'abord l'application Streamlit et indexez vos documents
-avant d'exécuter ce script — il ne réindexe rien lui-même.
+    python evaluate_rag.py                     (thème tabac, clé lue dans .env)
+    python evaluate_rag.py --theme tabac --api-key sk-...
+    python evaluate_rag.py --theme tabac --pause 13   (pause entre les questions)
 """
 
 import argparse
 import csv
 import json
-import os
 import sys
 import time
 
-from openai import OpenAI
-from sentence_transformers import SentenceTransformer
-import chromadb
-
-# ⚠️ Ces constantes doivent rester identiques à celles de application.py.
-# Si tu changes le modèle d'embedding, le seuil, ou le nombre de chunks
-# récupérés dans application.py, reporte le changement ici aussi.
-EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-CHROMA_PERSIST_DIR = "./chroma_db"
-COLLECTION_NAME = "gats_rag_multilingual"
-TOP_K = 5
-RELEVANCE_DISTANCE_THRESHOLD = 0.78
-
-REFUSAL_MARKERS = [
-    "je ne trouve pas",
-    "ne trouve pas d'information",
-    "pas d'information",
-    "n'est pas présente",
-    "non trouvé",
-]
+import config
+from llm import create_llm_client
+from rag.pipeline import answer_question
+from rag.store import get_chroma_client, get_collection, index_theme, load_embedder
 
 
-def load_test_set(path="eval_questions.json"):
+def load_test_set(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def search_context(sbert_model, collection, query, top_k=TOP_K):
-    normalized_query = " ".join(query.strip().lower().split())
-    query_embedding = sbert_model.encode([normalized_query], normalize_embeddings=True)[0].tolist()
-
-    results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
-
-    hits = []
-    for doc, meta, dist in zip(results["documents"][0], results["metadatas"][0], results["distances"][0]):
-        hits.append({
-            "text": doc,
-            "source": meta.get("source", "document"),
-            "page": meta.get("page", "?"),
-            "distance": dist
-        })
-    return hits
-
-
-def generate_answer(client, query, hits):
-    context_blocks = []
-    for i, h in enumerate(hits, start=1):
-        context_blocks.append(f"[Extrait {i} — {h['source']}, page {h['page']}]\n{h['text']}")
-    context_text = "\n\n".join(context_blocks)
-
-    prompt = f"""Tu es un expert en santé publique spécialisé dans la lutte contre le tabagisme en Afrique.
-
-CONSIGNE :
-- Réponds à la question UNIQUEMENT en utilisant les extraits du CONTEXTE ci-dessous.
-- Chaque extrait est étiqueté avec son document et son numéro de page.
-- Quand tu utilises une information, indique entre parenthèses le document et la page correspondante, par exemple (GATS_2023.pdf, page 12).
-- Si l'information n'est présente dans AUCUN extrait, dis clairement que tu ne la trouves pas dans les documents indexés. N'invente jamais de chiffre, de page ou de document.
-
-CONTEXTE :
-{context_text}
-
-QUESTION :
-{query}
-
-RÉPONSE (avec document + page entre parenthèses) :
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Tu es un assistant expert basé sur des documents officiels. Tu ne réponds qu'à partir du contexte fourni et tu cites toujours la page."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
+def page_retrieved(item, hits):
+    """La page attendue (et le document attendu, s'il est précisé) figure-t-elle parmi les résultats ?"""
+    expected_pages = set(item.get("expected_pages", []))
+    if not expected_pages:
+        return None
+    expected_source = item.get("expected_source")
+    return any(
+        h["page"] in expected_pages and (expected_source is None or h["source"] == expected_source)
+        for h in hits
     )
-    return response.choices[0].message.content
 
 
-def looks_like_refusal(answer_text):
-    lowered = answer_text.lower()
-    return any(marker in lowered for marker in REFUSAL_MARKERS)
+def evaluate_item(item, embedder, collections, llm):
+    start = time.time()
+    result = answer_question(item["question"], embedder, collections, llm)
+    elapsed = time.time() - start
+
+    if result.guardrail_triggered:
+        answer = "[Garde-fou] Aucun extrait suffisamment pertinent — réponse non générée."
+    elif result.error:
+        answer = f"[Erreur] {result.error}"
+    else:
+        answer = result.answer
+
+    expected_keywords = item.get("expected_keywords", [])
+    keyword_found = any(kw.lower() in answer.lower() for kw in expected_keywords) if expected_keywords else None
+
+    if result.error:
+        correct = False
+    elif item["expects_answer"]:
+        correct = bool(keyword_found) and not result.refused
+    else:
+        correct = result.refused  # bonne conduite = avoir refusé de répondre
+
+    return {
+        "id": item["id"],
+        "question": item["question"],
+        "expects_answer": item["expects_answer"],
+        "expected_page_retrieved": page_retrieved(item, result.hits),
+        "best_distance": round(result.best_distance, 3) if result.best_distance is not None else None,
+        "system_refused": result.refused,
+        "keyword_found": keyword_found,
+        "correct": correct,
+        "error": result.error or "",
+        "response_time_sec": round(elapsed, 2),
+        "answer": answer.replace("\n", " ")[:300],
+    }
 
 
-def run_evaluation(api_key, test_set_path="eval_questions.json", output_csv="eval_results.csv"):
-    print("Chargement du modèle d'embedding...")
-    sbert_model = SentenceTransformer(EMBEDDING_MODEL)
-
-    print("Connexion à la base vectorielle persistante...")
-    chroma = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
-    collection = chroma.get_or_create_collection(name=COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
-
-    if collection.count() == 0:
-        print("❌ La base vectorielle est vide. Lance d'abord l'app Streamlit et indexe tes documents.")
-        sys.exit(1)
-
-    print(f"Base connectée : {collection.count()} chunks indexés.\n")
-
-    client = OpenAI(api_key=api_key)
-    test_set = load_test_set(test_set_path)
-
-    results = []
-
-    for item in test_set:
-        qid = item["id"]
-        question = item["question"]
-        expects_answer = item["expects_answer"]
-        expected_keywords = item.get("expected_keywords", [])
-        expected_pages = set(item.get("expected_pages", []))
-
-        print(f"[{qid}] {question}")
-        start = time.time()
-
-        hits = search_context(sbert_model, collection, question)
-        best_distance = hits[0]["distance"] if hits else 999
-        relevant_hits = [h for h in hits if h["distance"] <= RELEVANCE_DISTANCE_THRESHOLD]
-
-        retrieved_pages = {h["page"] for h in hits}
-        expected_page_retrieved = bool(expected_pages & retrieved_pages) if expected_pages else None
-
-        if relevant_hits:
-            answer = generate_answer(client, question, relevant_hits)
-        else:
-            answer = "[Garde-fou] Aucun extrait suffisamment pertinent — réponse non générée."
-
-        elapsed = time.time() - start
-
-        system_refused = (not relevant_hits) or looks_like_refusal(answer)
-        keyword_found = any(kw.lower() in answer.lower() for kw in expected_keywords) if expected_keywords else None
-
-        if expects_answer:
-            correct = bool(keyword_found) and not system_refused
-        else:
-            correct = system_refused  # bonne conduite = avoir refusé de répondre
-
-        results.append({
-            "id": qid,
-            "question": question,
-            "expects_answer": expects_answer,
-            "expected_page_retrieved": expected_page_retrieved,
-            "best_distance": round(best_distance, 3),
-            "system_refused": system_refused,
-            "keyword_found": keyword_found,
-            "correct": correct,
-            "response_time_sec": round(elapsed, 2),
-            "answer": answer.replace("\n", " ")[:300],
-        })
-
-        verdict = "✅" if correct else "❌"
-        print(f"    {verdict} distance={best_distance:.3f} | temps={elapsed:.1f}s | refus_systeme={system_refused}")
-        print(f"    Réponse : {answer[:150]}...\n")
-
-    # ---- Rapport résumé ----
+def print_summary(theme, results):
     total = len(results)
     positives = [r for r in results if r["expects_answer"]]
     negatives = [r for r in results if not r["expects_answer"]]
+    with_pages = [r for r in positives if r["expected_page_retrieved"] is not None]
 
-    retrieval_hits = [r for r in positives if r["expected_page_retrieved"] is not None]
-    retrieval_rate = (sum(r["expected_page_retrieved"] for r in retrieval_hits) / len(retrieval_hits) * 100) if retrieval_hits else 0
-
-    answer_correct_rate = (sum(r["correct"] for r in positives) / len(positives) * 100) if positives else 0
-    refusal_correct_rate = (sum(r["correct"] for r in negatives) / len(negatives) * 100) if negatives else 0
-    overall_correct_rate = sum(r["correct"] for r in results) / total * 100
-    avg_time = sum(r["response_time_sec"] for r in results) / total
+    def rate(rows, key):
+        return sum(bool(r[key]) for r in rows) / len(rows) * 100 if rows else 0
 
     print("=" * 60)
-    print("RÉSUMÉ DE L'ÉVALUATION")
+    print(f"RÉSUMÉ DE L'ÉVALUATION — thème : {config.THEMES[theme]['label']}")
     print("=" * 60)
     print(f"Questions testées                         : {total}")
     print(f"  dont questions avec réponse attendue     : {len(positives)}")
     print(f"  dont questions pièges (pas de réponse)   : {len(negatives)}")
     print("-" * 60)
-    print(f"Taux de récupération de la bonne page      : {retrieval_rate:.1f}%")
-    print(f"Taux d'exactitude sur questions valides     : {answer_correct_rate:.1f}%")
-    print(f"Taux de bon refus (anti-hallucination)      : {refusal_correct_rate:.1f}%")
-    print(f"Taux de réussite global                     : {overall_correct_rate:.1f}%")
-    print(f"Temps de réponse moyen                      : {avg_time:.2f}s")
+    print(f"Taux de récupération de la bonne page      : {rate(with_pages, 'expected_page_retrieved'):.1f}%")
+    print(f"Taux d'exactitude sur questions valides    : {rate(positives, 'correct'):.1f}%")
+    print(f"Taux de bon refus (anti-hallucination)     : {rate(negatives, 'correct'):.1f}%")
+    print(f"Taux de réussite global                    : {rate(results, 'correct'):.1f}%")
+    print(f"Temps de réponse moyen                     : {sum(r['response_time_sec'] for r in results) / total:.2f}s")
+    errors = sum(1 for r in results if r["error"])
+    if errors:
+        print(f"⚠ Erreurs d'appel au modèle              : {errors} (voir la colonne 'error' du CSV)")
     print("=" * 60)
+
+
+def run_evaluation(theme, api_key=None, test_set_path=None, output_csv=None, pause=0):
+    settings = config.load_settings()
+    test_set_path = test_set_path or config.PROJECT_ROOT / config.THEMES[theme]["eval_file"]
+    output_csv = output_csv or config.PROJECT_ROOT / f"eval_results_{theme}.csv"
+
+    print(f"Thème évalué : {config.THEMES[theme]['label']} ({theme})")
+    print(f"Modèle       : {settings.provider_label} — {settings.llm_model}")
+    print(f"Jeu de test  : {test_set_path}\n")
+
+    try:
+        test_set = load_test_set(test_set_path)
+    except FileNotFoundError:
+        print(f"❌ Jeu de test introuvable : {test_set_path}")
+        sys.exit(1)
+
+    try:
+        llm = create_llm_client(settings, api_key=api_key)
+    except ValueError as e:
+        print(f"❌ {e} Fournissez-la avec --api-key ou dans le fichier .env.")
+        sys.exit(1)
+
+    print("Chargement du modèle d'embedding...")
+    embedder = load_embedder()
+    collection = get_collection(get_chroma_client(), theme)
+
+    if collection.count() == 0:
+        print("Base vide pour ce thème : indexation des documents...")
+        index_theme(theme, embedder, collection)
+        if collection.count() == 0:
+            print(f"❌ Aucun document indexable dans {config.theme_docs_dir(theme)}.")
+            sys.exit(1)
+
+    print(f"Base connectée : {collection.count()} morceaux indexés.\n")
+    collections = {theme: collection}
+
+    results = []
+    for index, item in enumerate(test_set):
+        if pause and index > 0:
+            time.sleep(pause)  # reste sous la limite de requêtes par minute du fournisseur
+        print(f"[{item['id']}] {item['question']}")
+        row = evaluate_item(item, embedder, collections, llm)
+        results.append(row)
+        verdict = "✅" if row["correct"] else "❌"
+        print(f"    {verdict} distance={row['best_distance']} | temps={row['response_time_sec']}s | refus={row['system_refused']}")
+        print(f"    Réponse : {row['answer'][:150]}...\n")
+
+    print_summary(theme, results)
 
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
@@ -220,14 +169,17 @@ def run_evaluation(api_key, test_set_path="eval_questions.json", output_csv="eva
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Évalue la fiabilité du pipeline RAG TobaccoAI.")
-    parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY"), help="Clé API OpenAI (ou variable d'env OPENAI_API_KEY)")
-    parser.add_argument("--test-set", default="eval_questions.json")
-    parser.add_argument("--output", default="eval_results.csv")
+    parser = argparse.ArgumentParser(description="Évalue la fiabilité du pipeline RAG, thème par thème.")
+    parser.add_argument("--theme", default="tabac", choices=list(config.THEMES))
+    parser.add_argument("--api-key", default=None, help="Clé d'API (sinon lue dans .env)")
+    parser.add_argument("--test-set", default=None, help="Jeu de questions (par défaut : celui du thème)")
+    parser.add_argument("--output", default=None, help="Fichier CSV de sortie (par défaut : eval_results_<thème>.csv)")
+    parser.add_argument("--pause", type=float, default=0,
+                        help="Secondes d'attente entre deux questions (ex : 13 pour l'offre gratuite de Gemini, 5 requêtes/min)")
     args = parser.parse_args()
 
-    if not args.api_key:
-        print("❌ Fournis une clé API avec --api-key sk-... ou via la variable d'environnement OPENAI_API_KEY.")
-        sys.exit(1)
+    # Évite une erreur d'affichage des accents/emojis dans certaines consoles Windows.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
 
-    run_evaluation(args.api_key, args.test_set, args.output)
+    run_evaluation(args.theme, args.api_key, args.test_set, args.output, args.pause)

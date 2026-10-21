@@ -1,0 +1,21 @@
+# Désactive les statistiques d'usage envoyées par Streamlit.
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+# Charte graphique (maquettes docs/maquettes/). Couleurs des thèmes : ui/style.css.
+[theme]
+base = "light"
+font = "'Plus Jakarta Sans':https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+headingFont = "'Plus Jakarta Sans':https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+primaryColor = "#0B5D4B"
+backgroundColor = "#F6F7F4"
+secondaryBackgroundColor = "#E7F1EE"
+textColor = "#13201C"
+linkColor = "#0B5D4B"
+borderColor = "#E3E6E1"
+baseRadius = "12px"
+buttonRadius = "10px"
+showWidgetBorder = true
